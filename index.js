@@ -8,29 +8,29 @@ const app = express()
 app.use(express.json())
 app.use(cors())
 
-const matches = []
-
-app.get('/', (req, res) => res.send('🫡'))
+app.get('/', (req, res) => res.send('🫡'));
 
 app.post('/llm', async (req, res) => {
-    const data = req.body;
-    const stream = await getStreamingCompletion({ userPrompt: data?.prompt, model: data?.model });
-    if (data?.model?.indexOf('gpt') > -1) {
+    const { prompt, model } = req.body;
+    try {
+        const stream = await getStreamingCompletion({ userPrompt: prompt, model });
+
         for await (const part of stream) {
-            // Uncomment below if you want to check chunk time generation
-            // const chunkTime = (Date.now() - starttime) / 1000;
-            // process.stdout.write(part.choices[0]?.delta || "");
-            // console.log("chunk time:", chunkTime);
-            res.write(part.choices[0]?.delta.content || "");
-        }
-    } else {
-        for await (const part of stream) {
-            if (part.type === 'content-delta') {
+            if (model.includes('gpt')) {
+                res.write(part.choices[0]?.delta?.content || "");
+            } else if (model.includes('cohere')) {
                 res.write(part.delta?.message?.content?.text || "");
+            } else if (model.includes('gemini')) {
+                res.write(part.result?.content || "");  // Gemini sample structure
+            } else if (model.includes('huggingface')) {
+                res.write(part.generated_text || "");
             }
         }
+        res.end();
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Error processing the request.');
     }
-    res.end();
-})
+});
 
-app.listen(process.env.PORT, () => console.log("Server listening on PORT: "+process.env.PORT))
+app.listen(process.env.PORT, () => console.log(`Server listening on PORT: ${process.env.PORT}`));
